@@ -1,0 +1,895 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Insulation Division — Sales KPI Countdown</title>
+<meta name="description" content="Live net sales vs. goal and countdown to fiscal quarter / fiscal year end for the Insulation Division sales team, synced from a spreadsheet in this repo.">
+<style>
+  :root { color-scheme: light; }
+
+  .viz-root {
+    --surface-1:      #fcfcfb;
+    --page-plane:     #f9f9f7;
+    --text-primary:   #0b0b0b;
+    --text-secondary: #52514e;
+    --text-muted:     #898781;
+    --gridline:       #e1e0d9;
+    --baseline:       #c3c2b7;
+    --border:         rgba(11,11,11,0.10);
+    /* Perma-Seal brand blues, sampled from the Perma-Seal Slack Cheat Sheet */
+    --accent:         #005ca1; /* Perma-Seal primary blue */
+    --accent-ramp-100: #cde2fb;
+    --brand-navy:      #005ca1;
+    --brand-navy-deep: #003f6e;
+    --brand-sky:       #7ba0ca; /* logo roof accent */
+    --brand-tint:      #eaf2fa; /* light blue tint used on the cheat sheet's tip box */
+    --status-good:     #0ca30c;
+    --status-warning:  #b5790a; /* darkened from #fab219 for light-surface text contrast */
+    --status-warning-fill: #fab219;
+    --status-critical: #d03b3b;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:where(:not([data-theme="light"])) .viz-root {
+      color-scheme: dark;
+      --surface-1:      #1a1a19;
+      --page-plane:     #0d0d0d;
+      --text-primary:   #ffffff;
+      --text-secondary: #c3c2b7;
+      --text-muted:     #898781;
+      --gridline:       #2c2c2a;
+      --baseline:       #383835;
+      --border:         rgba(255,255,255,0.10);
+      --accent:         #4aa3e0;
+      --accent-ramp-100: #184f95;
+      --brand-navy:      #005ca1;
+      --brand-navy-deep: #003f6e;
+      --brand-sky:       #7ba0ca;
+      --brand-tint:      #14324d;
+      --status-good:     #0ca30c;
+      --status-warning:  #fab219;
+      --status-warning-fill: #fab219;
+      --status-critical: #e66767;
+    }
+  }
+  :root[data-theme="dark"] .viz-root {
+    color-scheme: dark;
+    --surface-1:      #1a1a19;
+    --page-plane:     #0d0d0d;
+    --text-primary:   #ffffff;
+    --text-secondary: #c3c2b7;
+    --text-muted:     #898781;
+    --gridline:       #2c2c2a;
+    --baseline:       #383835;
+    --border:         rgba(255,255,255,0.10);
+    --accent:         #4aa3e0;
+    --accent-ramp-100: #184f95;
+    --brand-navy:      #005ca1;
+    --brand-navy-deep: #003f6e;
+    --brand-sky:       #7ba0ca;
+    --brand-tint:      #14324d;
+    --status-good:     #0ca30c;
+    --status-warning:  #fab219;
+    --status-warning-fill: #fab219;
+    --status-critical: #e66767;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    background: var(--page-plane);
+    color: var(--text-primary);
+  }
+  .viz-root { min-height: 100vh; padding: 24px 20px 60px; }
+  .wrap { max-width: 1080px; margin: 0 auto; }
+
+  header.top {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 16px;
+    flex-wrap: wrap;
+    margin-bottom: 16px;
+  }
+  header.top h1 {
+    font-size: 22px;
+    margin: 0 0 4px;
+    letter-spacing: -0.01em;
+    color: var(--brand-navy);
+  }
+  header.top p.sub {
+    margin: 0;
+    color: var(--text-secondary);
+    font-size: 14px;
+  }
+  .top-actions { display: flex; gap: 8px; align-items: center; }
+  .brand-rule {
+    height: 3px;
+    border-radius: 2px;
+    background: var(--brand-navy);
+    margin-bottom: 22px;
+  }
+  button.chip {
+    font: inherit;
+    font-size: 13px;
+    background: var(--surface-1);
+    color: var(--text-primary);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 8px 12px;
+    cursor: pointer;
+  }
+  button.chip:hover { border-color: var(--accent); }
+  button.chip:active { transform: translateY(1px); }
+  button.chip:disabled { opacity: 0.6; cursor: default; }
+
+  /* ---- Data status banner ---- */
+  .data-banner {
+    display: none;
+    align-items: flex-start;
+    gap: 10px;
+    font-size: 13px;
+    padding: 12px 14px;
+    border-radius: 10px;
+    margin-bottom: 18px;
+    border: 1px solid transparent;
+  }
+  .data-banner.show { display: flex; }
+  .data-banner.critical {
+    background: color-mix(in srgb, var(--status-critical) 12%, var(--surface-1));
+    border-color: color-mix(in srgb, var(--status-critical) 35%, transparent);
+    color: var(--status-critical);
+  }
+  .data-banner.warning {
+    background: color-mix(in srgb, var(--status-warning-fill) 16%, var(--surface-1));
+    border-color: color-mix(in srgb, var(--status-warning-fill) 40%, transparent);
+    color: var(--status-warning);
+  }
+  .data-banner .icon { font-weight: 700; }
+  .data-banner code {
+    background: rgba(0,0,0,0.08);
+    padding: 1px 5px;
+    border-radius: 4px;
+  }
+
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 16px;
+  }
+  @media (max-width: 720px) {
+    .grid { grid-template-columns: 1fr; }
+  }
+
+  .card {
+    background: var(--surface-1);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 18px 20px 20px;
+  }
+  .card h2 {
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--text-muted);
+    margin: 0 0 2px;
+    font-weight: 600;
+  }
+  .card .period-label {
+    font-size: 12px;
+    color: var(--text-secondary);
+    margin: 0 0 14px;
+  }
+
+  /* ---- Hero: Fiscal Year net sales badge ---- */
+  .hero {
+    background: linear-gradient(135deg, var(--brand-navy) 0%, var(--brand-navy-deep) 100%);
+    border: 1px solid var(--brand-navy-deep);
+    border-radius: 14px;
+    padding: 24px 28px 26px;
+    margin-bottom: 16px;
+    color: #ffffff;
+  }
+  .hero h2 {
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--brand-sky);
+    margin: 0 0 2px;
+    font-weight: 700;
+  }
+  .hero .period-label {
+    font-size: 12.5px;
+    color: rgba(255,255,255,0.75);
+    margin: 0 0 6px;
+  }
+  .hero .stat-figure {
+    font-size: 46px;
+    font-weight: 700;
+    color: #ffffff;
+    line-height: 1.05;
+  }
+  .hero .goal-figure {
+    font-size: 14px;
+    color: rgba(255,255,255,0.8);
+  }
+  .hero .delta-badge {
+    font-size: 15px;
+    padding: 6px 14px;
+    margin-top: 12px;
+    background: #ffffff;
+  }
+  .hero .delta-badge.good     { background: #ffffff; color: var(--status-good); }
+  .hero .delta-badge.warning  { background: #ffffff; color: var(--status-warning); }
+  .hero .delta-badge.critical { background: #ffffff; color: var(--status-critical); }
+  .hero .meter-track {
+    background: rgba(255,255,255,0.22);
+    height: 12px;
+  }
+  .hero .meter-caption {
+    color: rgba(255,255,255,0.75);
+  }
+  .hero .context-note {
+    color: rgba(255,255,255,0.75);
+  }
+  @media (max-width: 560px) {
+    .hero .stat-figure { font-size: 34px; }
+  }
+
+  /* ---- Sales stat cards ---- */
+  .stat-row {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+  .stat-figure {
+    font-size: 30px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+  }
+  .goal-figure { font-size: 13px; color: var(--text-secondary); }
+
+  .delta-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    font-weight: 600;
+    padding: 4px 9px;
+    border-radius: 999px;
+    margin-top: 10px;
+  }
+  .delta-badge.good     { background: color-mix(in srgb, var(--status-good) 16%, transparent); color: var(--status-good); }
+  .delta-badge.warning  { background: color-mix(in srgb, var(--status-warning-fill) 22%, transparent); color: var(--status-warning); }
+  .delta-badge.critical { background: color-mix(in srgb, var(--status-critical) 16%, transparent); color: var(--status-critical); }
+  .delta-badge .icon { font-size: 12px; }
+
+  .meter-track {
+    position: relative;
+    height: 10px;
+    border-radius: 6px;
+    background: var(--gridline);
+    margin-top: 14px;
+    overflow: hidden;
+  }
+  .meter-fill {
+    position: absolute;
+    inset: 0 auto 0 0;
+    border-radius: 6px;
+    transition: width 0.3s ease;
+  }
+  .meter-fill.good     { background: var(--status-good); }
+  .meter-fill.warning  { background: var(--status-warning-fill); }
+  .meter-fill.critical { background: var(--status-critical); }
+  .meter-caption {
+    display: flex;
+    justify-content: space-between;
+    font-size: 12px;
+    color: var(--text-muted);
+    margin-top: 6px;
+  }
+
+  .context-note { font-size: 12px; color: var(--text-muted); margin-top: 10px; }
+
+  /* ---- Countdown cards ---- */
+  .countdown-units {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 8px;
+    margin-top: 6px;
+  }
+  .unit {
+    background: var(--page-plane);
+    border: 1px solid var(--gridline);
+    border-radius: 8px;
+    text-align: center;
+    padding: 10px 2px;
+  }
+  .unit .n {
+    font-size: 24px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    color: var(--accent);
+  }
+  .unit .u {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--text-muted);
+    margin-top: 2px;
+  }
+  @media (max-width: 460px) {
+    .countdown-units { grid-template-columns: repeat(5, 1fr); gap: 4px; }
+    .unit .n { font-size: 18px; }
+  }
+  .target-date {
+    font-size: 12px;
+    color: var(--text-secondary);
+    margin-top: 12px;
+  }
+
+  footer.bottom {
+    margin-top: 28px;
+    padding-top: 16px;
+    border-top: 1px solid var(--gridline);
+    font-size: 12px;
+    color: var(--text-muted);
+    display: flex;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .toast {
+    position: fixed;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%) translateY(20px);
+    background: var(--text-primary);
+    color: var(--surface-1);
+    padding: 10px 16px;
+    border-radius: 8px;
+    font-size: 13px;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s ease, transform 0.2s ease;
+  }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+</style>
+</head>
+<body>
+<div class="viz-root">
+  <div class="wrap">
+
+    <header class="top">
+      <div>
+        <h1 id="page-title">Insulation Division — Sales KPI Countdown</h1>
+        <p class="sub" id="page-sub">Live net sales vs. goal, synced from <code id="data-path-label">Insulation Division Revenue Coundown.xlsx</code>.</p>
+      </div>
+      <div class="top-actions">
+        <button class="chip" id="theme-toggle" type="button" aria-label="Toggle dark mode">🌓 Theme</button>
+        <button class="chip" id="refresh-data" type="button">↻ Refresh data</button>
+      </div>
+    </header>
+
+    <div class="brand-rule" role="presentation"></div>
+
+    <div class="data-banner" id="data-banner" role="status" aria-live="polite">
+      <span class="icon" id="data-banner-icon">⚠</span>
+      <span id="data-banner-text"></span>
+    </div>
+
+    <!-- FISCAL YEAR NET SALES — hero badge -->
+    <section class="card hero" aria-labelledby="year-h">
+      <h2 id="year-h">Net Sales — Fiscal Year</h2>
+      <p class="period-label" id="year-period"></p>
+
+      <div class="stat-row">
+        <div>
+          <div class="stat-figure" id="year-actual">—</div>
+          <div class="goal-figure">of <span id="year-goal-display">—</span> fiscal year goal</div>
+        </div>
+      </div>
+
+      <div class="delta-badge" id="year-badge"><span class="icon" id="year-icon"></span><span id="year-delta-text"></span></div>
+
+      <div class="meter-track"><div class="meter-fill" id="year-meter"></div></div>
+      <div class="meter-caption"><span id="year-pct"></span><span>100% = goal</span></div>
+
+      <p class="context-note" id="year-days-left"></p>
+    </section>
+
+    <div class="grid">
+
+      <!-- MONTH NET SALES -->
+      <section class="card" aria-labelledby="month-h">
+        <h2 id="month-h">Net Sales — Month</h2>
+        <p class="period-label" id="month-period"></p>
+
+        <div class="stat-row">
+          <div>
+            <div class="stat-figure" id="month-actual">—</div>
+            <div class="goal-figure">of <span id="month-goal-display">—</span> goal</div>
+          </div>
+        </div>
+
+        <div class="delta-badge" id="month-badge"><span class="icon" id="month-icon"></span><span id="month-delta-text"></span></div>
+
+        <div class="meter-track"><div class="meter-fill" id="month-meter"></div></div>
+        <div class="meter-caption"><span id="month-pct"></span><span>100% = goal</span></div>
+
+        <p class="context-note" id="month-days-left"></p>
+      </section>
+
+      <!-- QUARTER NET SALES -->
+      <section class="card" aria-labelledby="quarter-h">
+        <h2 id="quarter-h">Net Sales — Fiscal Quarter</h2>
+        <p class="period-label" id="quarter-period"></p>
+
+        <div class="stat-row">
+          <div>
+            <div class="stat-figure" id="quarter-actual">—</div>
+            <div class="goal-figure">of <span id="quarter-goal-display">—</span> goal</div>
+          </div>
+        </div>
+
+        <div class="delta-badge" id="quarter-badge"><span class="icon" id="quarter-icon"></span><span id="quarter-delta-text"></span></div>
+
+        <div class="meter-track"><div class="meter-fill" id="quarter-meter"></div></div>
+        <div class="meter-caption"><span id="quarter-pct"></span><span>100% = goal</span></div>
+
+        <p class="context-note" id="quarter-days-left"></p>
+      </section>
+
+      <!-- FISCAL QUARTER COUNTDOWN -->
+      <section class="card" aria-labelledby="q-countdown-h">
+        <h2 id="q-countdown-h">Countdown — Fiscal Quarter End</h2>
+        <p class="period-label" id="q-countdown-period"></p>
+
+        <div class="countdown-units" id="q-countdown-units">
+          <div class="unit"><div class="n" id="q-months">0</div><div class="u">Months</div></div>
+          <div class="unit"><div class="n" id="q-days">0</div><div class="u">Days</div></div>
+          <div class="unit"><div class="n" id="q-hours">00</div><div class="u">Hours</div></div>
+          <div class="unit"><div class="n" id="q-minutes">00</div><div class="u">Min</div></div>
+          <div class="unit"><div class="n" id="q-seconds">00</div><div class="u">Sec</div></div>
+        </div>
+        <p class="target-date" id="q-target-date"></p>
+      </section>
+
+      <!-- FISCAL YEAR COUNTDOWN -->
+      <section class="card" aria-labelledby="y-countdown-h">
+        <h2 id="y-countdown-h">Countdown — Fiscal Year End</h2>
+        <p class="period-label" id="y-countdown-period"></p>
+
+        <div class="countdown-units" id="y-countdown-units">
+          <div class="unit"><div class="n" id="y-months">0</div><div class="u">Months</div></div>
+          <div class="unit"><div class="n" id="y-days">0</div><div class="u">Days</div></div>
+          <div class="unit"><div class="n" id="y-hours">00</div><div class="u">Hours</div></div>
+          <div class="unit"><div class="n" id="y-minutes">00</div><div class="u">Min</div></div>
+          <div class="unit"><div class="n" id="y-seconds">00</div><div class="u">Sec</div></div>
+        </div>
+        <p class="target-date" id="y-target-date"></p>
+      </section>
+
+    </div>
+
+    <footer class="bottom">
+      <span id="last-updated">Data synced: —</span>
+      <span>Fiscal year begins <span id="fy-start-label"></span> · figures come from the spreadsheet in this repo, not manual entry</span>
+    </footer>
+
+  </div>
+</div>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<!-- SheetJS — parses the .xlsx in-browser, no build step -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
+<script>
+(function () {
+  "use strict";
+
+  /* =========================================================
+     CONFIG — edit these for your team
+     ========================================================= */
+  const CONFIG = {
+    companyName: "Perma-Seal",
+    divisionName: "Insulation Division",
+    // 1 = January … 12 = December. This team's fiscal year starts March 1.
+    fiscalYearStartMonth: 3,
+    // Path (relative to this HTML file) to the spreadsheet teammates push updates to.
+    // Matches the file's real name exactly (spaces, "Coundown" typo and all) so nobody
+    // has to rename it locally — you can't put a "/" in a filename on Windows/macOS,
+    // so keeping this at the repo root avoids needing a data/ subfolder entirely.
+    dataFilePath: "Insulation Division Revenue Coundown.xlsx",
+    // How often to re-fetch the spreadsheet while the page stays open, in ms.
+    pollIntervalMs: 60000
+  };
+
+  document.title = CONFIG.companyName + " " + CONFIG.divisionName + " — Sales KPI Countdown";
+  document.getElementById("page-title").textContent = CONFIG.companyName + " " + CONFIG.divisionName + " — Sales KPI Countdown";
+  document.getElementById("data-path-label").textContent = CONFIG.dataFilePath;
+
+  const MONTH_NAMES = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+
+  // Column order, by position (0-indexed) — matches the sheet exactly.
+  // Duplicate "Difference" headers are fine; we never read headers by name.
+  const COL = {
+    MONTH: 0,
+    MONTH_GOAL: 1, MONTH_TOTAL: 2, MONTH_DIFF: 3,
+    QUARTER_GOAL: 4, QUARTER_TOTAL: 5, QUARTER_DIFF: 6,
+    YEAR_GOAL: 7, YEAR_TOTAL: 8, YEAR_DIFF: 9
+  };
+
+  /* =========================================================
+     Fiscal calendar math
+     ========================================================= */
+  function addMonthsClamped(date, n) {
+    const d = new Date(date.getTime());
+    const day = d.getDate();
+    d.setDate(1);
+    d.setMonth(d.getMonth() + n);
+    const daysInTarget = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
+    d.setDate(Math.min(day, daysInTarget));
+    return d;
+  }
+
+  function getFiscalYearBounds(date, fyStartMonth) {
+    const y = date.getFullYear();
+    const m = date.getMonth() + 1;
+    const fyStartYear = (m >= fyStartMonth) ? y : y - 1;
+    const start = new Date(fyStartYear, fyStartMonth - 1, 1, 0, 0, 0, 0);
+    const end = new Date(fyStartYear + 1, fyStartMonth - 1, 1, 0, 0, 0, 0);
+    return { start, end, label: "FY" + fyStartYear + "–" + String(fyStartYear + 1).slice(-2) };
+  }
+
+  function getFiscalQuarterBounds(date, fyStartMonth) {
+    const fy = getFiscalYearBounds(date, fyStartMonth);
+    const monthsSinceStart = (date.getFullYear() * 12 + date.getMonth()) - (fy.start.getFullYear() * 12 + fy.start.getMonth());
+    const qIndex = Math.floor(monthsSinceStart / 3); // 0-3
+    const qStart = new Date(fy.start.getFullYear(), fy.start.getMonth() + qIndex * 3, 1);
+    const qEnd = new Date(fy.start.getFullYear(), fy.start.getMonth() + qIndex * 3 + 3, 1);
+    return { start: qStart, end: qEnd, quarterNumber: qIndex + 1, fyLabel: fy.label };
+  }
+
+  function getCalendarMonthBounds(date) {
+    const start = new Date(date.getFullYear(), date.getMonth(), 1);
+    const end = new Date(date.getFullYear(), date.getMonth() + 1, 1);
+    return { start, end };
+  }
+
+  // Countdown broken into months/days/hours/min/sec, calendar-accurate.
+  function countdownParts(now, target) {
+    if (target.getTime() <= now.getTime()) {
+      return { expired: true, months: 0, days: 0, hours: 0, minutes: 0, seconds: 0 };
+    }
+    let cursor = now;
+    let months = 0;
+    while (true) {
+      const next = addMonthsClamped(cursor, 1);
+      if (next.getTime() <= target.getTime()) {
+        cursor = next;
+        months++;
+      } else break;
+    }
+    let ms = target.getTime() - cursor.getTime();
+    const days = Math.floor(ms / 86400000); ms -= days * 86400000;
+    const hours = Math.floor(ms / 3600000); ms -= hours * 3600000;
+    const minutes = Math.floor(ms / 60000); ms -= minutes * 60000;
+    const seconds = Math.floor(ms / 1000);
+    return { expired: false, months, days, hours, minutes, seconds };
+  }
+
+  function fmtDate(d) {
+    return MONTH_NAMES[d.getMonth()] + " " + d.getDate() + ", " + d.getFullYear();
+  }
+
+  function fmtMoney(n) {
+    if (n === null || n === undefined) return "—";
+    const v = Number(n) || 0;
+    return "$" + v.toLocaleString("en-US", { maximumFractionDigits: 0 });
+  }
+
+  /* =========================================================
+     Spreadsheet data — the only source of truth for the
+     sales figures. No manual entry, nothing saved locally.
+     ========================================================= */
+  let salesData = null;        // last successfully parsed row, or null if never loaded
+  let lastFetchOk = null;      // Date of last successful fetch
+  let sourceLastModified = null;
+
+  function parseNumberCell(v) {
+    if (v === null || v === undefined || v === "") return 0;
+    if (typeof v === "number") return v;
+    const cleaned = String(v).replace(/[$,\s]/g, "").replace(/^\(([\d.]+)\)$/, "-$1");
+    const n = parseFloat(cleaned);
+    return isNaN(n) ? 0 : n;
+  }
+
+  function showBanner(level, html) {
+    const banner = document.getElementById("data-banner");
+    const icon = document.getElementById("data-banner-icon");
+    banner.className = "data-banner show " + level;
+    icon.textContent = level === "critical" ? "✕" : "⚠";
+    document.getElementById("data-banner-text").innerHTML = html;
+  }
+  function hideBanner() {
+    document.getElementById("data-banner").className = "data-banner";
+  }
+
+  async function loadSpreadsheetData(isManualRefresh) {
+    const refreshBtn = document.getElementById("refresh-data");
+    if (isManualRefresh) refreshBtn.disabled = true;
+
+    try {
+      // encodeURI (not encodeURIComponent) so spaces become %20 while "/" stays a path separator.
+      const encodedPath = encodeURI(CONFIG.dataFilePath);
+      const url = encodedPath + (encodedPath.indexOf("?") === -1 ? "?" : "&") + "_=" + Date.now();
+      let res;
+      try {
+        res = await fetch(url, { cache: "no-store" });
+      } catch (fetchErr) {
+        const e = new Error("Couldn't reach " + CONFIG.dataFilePath + " (" + fetchErr.message + ").");
+        e.isNetworkError = true;
+        throw e;
+      }
+      if (!res.ok) {
+        const e = new Error("HTTP " + res.status + " fetching " + CONFIG.dataFilePath);
+        e.isNetworkError = true;
+        throw e;
+      }
+      sourceLastModified = res.headers.get("last-modified");
+      const buf = await res.arrayBuffer();
+      const wb = XLSX.read(new Uint8Array(buf), { type: "array" });
+      const sheet = wb.Sheets[wb.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, blankrows: false });
+
+      // Find the header row (first cell === "Month", case-insensitive) so an
+      // optional legend/instruction row above it doesn't throw off parsing.
+      let headerRowIdx = -1;
+      for (let i = 0; i < rows.length; i++) {
+        const first = rows[i] && rows[i][0];
+        if (first && String(first).trim().toLowerCase() === "month") { headerRowIdx = i; break; }
+      }
+      if (headerRowIdx === -1) {
+        throw new Error(
+          'Could not find a header row. The first sheet needs a row whose first cell is exactly "Month", ' +
+          "with the goal/total/difference columns after it in the documented order."
+        );
+      }
+
+      // Collect every row that has a Month value, in sheet order. The sheet is
+      // expected to list exactly one row per fiscal-year month, in fiscal order
+      // (e.g. starting March for a March-start fiscal year) — that ordering is
+      // what lets us group rows into quarters below without relying on the
+      // Quarter/Fiscal-Year columns being filled in on any particular row.
+      const monthRows = [];
+      for (let i = headerRowIdx + 1; i < rows.length; i++) {
+        const row = rows[i];
+        if (row && row[COL.MONTH]) monthRows.push(row);
+      }
+
+      const now = new Date();
+      const currentMonthName = MONTH_NAMES[now.getMonth()];
+      const matchIndex = monthRows.findIndex(
+        row => String(row[COL.MONTH]).trim().toLowerCase() === currentMonthName.toLowerCase()
+      );
+      if (matchIndex === -1) {
+        throw new Error(
+          'No row found for "' + currentMonthName + '" in the Month column. ' +
+          "Check that a row exists with that exact month name (spelled out, e.g. \"" + currentMonthName + "\")."
+        );
+      }
+      const matchRow = monthRows[matchIndex];
+
+      // Quarter and fiscal-year figures are computed here from each row's
+      // Monthly Goal / Monthly Total, rather than read from the sheet's own
+      // Quarter/Fiscal-Year columns — those are frequently only filled in on
+      // one row per quarter (e.g. via a SUM formula on the quarter's last
+      // month), or only on the year's final row, which would leave every
+      // other month showing zero. Summing the monthly columns ourselves gives
+      // the right number regardless of which row carries a formula.
+      const quarterStart = Math.floor(matchIndex / 3) * 3;
+      const quarterRows = monthRows.slice(quarterStart, quarterStart + 3);
+      const sumCol = (rowsToSum, col) => rowsToSum.reduce((sum, r) => sum + parseNumberCell(r[col]), 0);
+
+      const yearGoalFromRow = parseNumberCell(matchRow[COL.YEAR_GOAL]);
+      const yearGoal = yearGoalFromRow > 0 ? yearGoalFromRow : sumCol(monthRows, COL.MONTH_GOAL);
+
+      salesData = {
+        monthGoal: parseNumberCell(matchRow[COL.MONTH_GOAL]),
+        monthActual: parseNumberCell(matchRow[COL.MONTH_TOTAL]),
+        quarterGoal: sumCol(quarterRows, COL.MONTH_GOAL),
+        quarterActual: sumCol(quarterRows, COL.MONTH_TOTAL),
+        yearGoal: yearGoal,
+        yearActual: sumCol(monthRows.slice(0, matchIndex + 1), COL.MONTH_TOTAL)
+      };
+      lastFetchOk = new Date();
+      hideBanner();
+      if (isManualRefresh) showToast("Data refreshed.");
+    } catch (err) {
+      const detail = (err && err.message) ? err.message.replace(/\.$/, "") : String(err);
+      const hostingHint = (err && err.isNetworkError)
+        ? " If you just opened this file directly (double-clicked it), that's expected — browsers block " +
+          "in-page file loading outside a web server. Host it (GitHub Pages, or run a local server) and reload."
+        : "";
+      if (salesData) {
+        // Keep showing the last good numbers — a stale-but-real figure beats a blank dashboard.
+        showBanner("warning",
+          "Couldn't refresh from <code>" + CONFIG.dataFilePath + "</code> (" + escapeHtml(detail) + "). " +
+          "Showing the last figures loaded successfully" + (lastFetchOk ? " at " + lastFetchOk.toLocaleTimeString() : "") + "." + hostingHint);
+      } else {
+        showBanner("critical",
+          "Couldn't load <code>" + CONFIG.dataFilePath + "</code>: " + escapeHtml(detail) + "." + hostingHint
+        );
+      }
+      if (isManualRefresh) showToast("Refresh failed — see the message above.");
+    } finally {
+      if (isManualRefresh) refreshBtn.disabled = false;
+      renderAll();
+    }
+  }
+
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+  }
+
+  /* =========================================================
+     Status classification (good / warning / critical)
+     ========================================================= */
+  function classify(pct) {
+    if (pct >= 100) return "good";
+    if (pct >= 90) return "warning";
+    return "critical";
+  }
+  const STATUS_LABEL = { good: "On track", warning: "At risk", critical: "Behind" };
+  const STATUS_ICON = { good: "✓", warning: "⚠", critical: "✕" };
+
+  function renderSalesCard(prefix, goal, actual) {
+    const haveData = goal !== undefined && goal !== null && actual !== undefined && actual !== null;
+    const g = Number(goal) || 0;
+    const a = Number(actual) || 0;
+
+    document.getElementById(prefix + "-actual").textContent = haveData ? fmtMoney(a) : "—";
+    document.getElementById(prefix + "-goal-display").textContent = haveData ? fmtMoney(g) : "—";
+
+    if (!haveData) {
+      document.getElementById(prefix + "-badge").className = "delta-badge";
+      document.getElementById(prefix + "-icon").textContent = "";
+      document.getElementById(prefix + "-delta-text").textContent = "Waiting for data…";
+      document.getElementById(prefix + "-meter").style.width = "0%";
+      document.getElementById(prefix + "-pct").textContent = "";
+      return;
+    }
+
+    const diff = a - g;
+    const pct = g > 0 ? (a / g) * 100 : (a > 0 ? 100 : 0);
+    const status = classify(pct);
+
+    const badge = document.getElementById(prefix + "-badge");
+    badge.className = "delta-badge " + status;
+    document.getElementById(prefix + "-icon").textContent = STATUS_ICON[status];
+    const diffText = (diff >= 0 ? "+" : "−") + fmtMoney(Math.abs(diff)) + " " + (diff >= 0 ? "surplus" : "short of goal");
+    document.getElementById(prefix + "-delta-text").textContent = STATUS_LABEL[status] + " · " + diffText;
+
+    const meter = document.getElementById(prefix + "-meter");
+    meter.className = "meter-fill " + status;
+    meter.style.width = Math.max(0, Math.min(100, pct)) + "%";
+    document.getElementById(prefix + "-pct").textContent = pct.toFixed(1) + "% of goal";
+  }
+
+  /* =========================================================
+     Render loop — countdowns tick every second (pure clock math);
+     sales cards re-render whenever fresh data arrives or a tick fires.
+     ========================================================= */
+  function renderAll() {
+    const now = new Date();
+
+    const cm = getCalendarMonthBounds(now);
+    const fq = getFiscalQuarterBounds(now, CONFIG.fiscalYearStartMonth);
+    const fy = getFiscalYearBounds(now, CONFIG.fiscalYearStartMonth);
+
+    document.getElementById("month-period").textContent =
+      MONTH_NAMES[now.getMonth()] + " " + now.getFullYear();
+    const daysLeftMonth = Math.ceil((cm.end - now) / 86400000);
+    document.getElementById("month-days-left").textContent =
+      daysLeftMonth + " day" + (daysLeftMonth === 1 ? "" : "s") + " left in the month (ends " + fmtDate(new Date(cm.end - 1)) + ")";
+
+    document.getElementById("quarter-period").textContent =
+      fq.fyLabel + " Q" + fq.quarterNumber + " · " + fmtDate(fq.start) + " – " + fmtDate(new Date(fq.end - 1));
+    const daysLeftQuarter = Math.ceil((fq.end - now) / 86400000);
+    document.getElementById("quarter-days-left").textContent =
+      daysLeftQuarter + " day" + (daysLeftQuarter === 1 ? "" : "s") + " left in the fiscal quarter";
+
+    document.getElementById("q-countdown-period").textContent = fq.fyLabel + " Q" + fq.quarterNumber;
+    document.getElementById("q-target-date").textContent = "Quarter ends " + fmtDate(new Date(fq.end - 1)) + " at 11:59:59 PM";
+
+    document.getElementById("y-countdown-period").textContent = fy.label;
+    document.getElementById("y-target-date").textContent = "Fiscal year ends " + fmtDate(new Date(fy.end - 1)) + " at 11:59:59 PM";
+
+    document.getElementById("fy-start-label").textContent = MONTH_NAMES[CONFIG.fiscalYearStartMonth - 1] + " 1";
+
+    document.getElementById("year-period").textContent =
+      fy.label + " · " + fmtDate(fy.start) + " – " + fmtDate(new Date(fy.end - 1));
+    const daysLeftYear = Math.ceil((fy.end - now) / 86400000);
+    document.getElementById("year-days-left").textContent =
+      daysLeftYear + " day" + (daysLeftYear === 1 ? "" : "s") + " left in the fiscal year";
+
+    // countdowns
+    fillCountdown("q", countdownParts(now, fq.end));
+    fillCountdown("y", countdownParts(now, fy.end));
+
+    // sales cards — driven entirely by the last spreadsheet load
+    renderSalesCard("month", salesData && salesData.monthGoal, salesData && salesData.monthActual);
+    renderSalesCard("quarter", salesData && salesData.quarterGoal, salesData && salesData.quarterActual);
+    renderSalesCard("year", salesData && salesData.yearGoal, salesData && salesData.yearActual);
+
+    const lastUpdatedEl = document.getElementById("last-updated");
+    if (lastFetchOk) {
+      let text = "Data synced: " + lastFetchOk.toLocaleTimeString();
+      if (sourceLastModified) text += " · file last modified " + new Date(sourceLastModified).toLocaleString();
+      lastUpdatedEl.textContent = text;
+    } else {
+      lastUpdatedEl.textContent = "Data synced: —";
+    }
+  }
+
+  function fillCountdown(prefix, parts) {
+    const pad = n => String(n).padStart(2, "0");
+    document.getElementById(prefix + "-months").textContent = parts.months;
+    document.getElementById(prefix + "-days").textContent = parts.days;
+    document.getElementById(prefix + "-hours").textContent = pad(parts.hours);
+    document.getElementById(prefix + "-minutes").textContent = pad(parts.minutes);
+    document.getElementById(prefix + "-seconds").textContent = pad(parts.seconds);
+  }
+
+  /* =========================================================
+     Theme toggle
+     ========================================================= */
+  const THEME_KEY = "insulation-kpi-countdown-theme";
+  function applyTheme(t) {
+    if (t === "dark" || t === "light") {
+      document.documentElement.setAttribute("data-theme", t);
+    } else {
+      document.documentElement.removeAttribute("data-theme");
+    }
+  }
+  applyTheme(localStorage.getItem(THEME_KEY));
+  document.getElementById("theme-toggle").addEventListener("click", function () {
+    const current = document.documentElement.getAttribute("data-theme");
+    const prefersDark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
+    let next;
+    if (!current) next = prefersDark ? "light" : "dark";
+    else next = current === "dark" ? "light" : "dark";
+    applyTheme(next);
+    try { localStorage.setItem(THEME_KEY, next); } catch (e) {}
+  });
+
+  /* =========================================================
+     Manual refresh + toast
+     ========================================================= */
+  function showToast(msg) {
+    const t = document.getElementById("toast");
+    t.textContent = msg;
+    t.classList.add("show");
+    setTimeout(function () { t.classList.remove("show"); }, 2200);
+  }
+  document.getElementById("refresh-data").addEventListener("click", function () {
+    loadSpreadsheetData(true);
+  });
+
+  /* =========================================================
+     Boot
+     ========================================================= */
+  renderAll();
+  setInterval(renderAll, 1000);
+  loadSpreadsheetData(false);
+  setInterval(function () { loadSpreadsheetData(false); }, CONFIG.pollIntervalMs);
+
+})();
+</script>
+</body>
+</html>
